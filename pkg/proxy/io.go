@@ -80,6 +80,22 @@ func copyWithTimeout(ctx context.Context, dst, src net.Conn, timeout time.Durati
 		// Cancel context when this goroutine exits to signal the other goroutine to stop
 		cancel()
 		logger.Debugf("Cancelled context for %s direction %s", direction, clientAddr)
+		func() {
+			defer func() {
+				if err := recover(); err != nil {
+					logger.Debugf("close dst destination failed: %#v", err)
+				}
+			}()
+			dst.Close()
+		}()
+		func() {
+			defer func() {
+				if err := recover(); err != nil {
+					logger.Debugf("close src destination failed: %#v", err)
+				}
+			}()
+			src.Close()
+		}()
 	}()
 
 	buf := bufferPool.Get().([]byte)
@@ -136,17 +152,17 @@ func relayWithTimeout(localConn, remoteConn net.Conn, timeout time.Duration) {
 
 	closeConnections := func() {
 		logger.Debugf("Closing connections for %s <-> %s", localConn.RemoteAddr(), remoteConn.RemoteAddr())
-		
+
 		// Cancel context first to signal goroutines to stop
 		cancel()
-		
+
 		// Close connections with proper error handling
 		if err := localConn.Close(); err != nil && !isConnectionClosed(err) {
 			logger.Debugf("Error closing local connection: %v", err)
 		} else {
 			logger.Debugf("Local connection closed successfully")
 		}
-		
+
 		if err := remoteConn.Close(); err != nil && !isConnectionClosed(err) {
 			logger.Debugf("Error closing remote connection: %v", err)
 		} else {
